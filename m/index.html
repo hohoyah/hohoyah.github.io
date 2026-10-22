@@ -2,41 +2,97 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CoverageManager (보장분석 관리)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#2763a6">
+<title>보장분석 관리</title>
 <style>
- body{margin:0;background:#f2f5f8;color:#203040;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;line-height:1.7}
- main{max-width:720px;margin:40px auto;padding:32px 28px;background:#fff;border:1px solid #dce3ea;border-radius:14px}
- h1{margin:0 0 6px;font-size:24px}
- h2{margin:28px 0 8px;font-size:17px}
- p,li{font-size:15px}
- .sub{margin:0 0 20px;color:#718096}
- a{color:#2763a6}
- footer{margin-top:32px;color:#718096;font-size:13px}
- @media(max-width:760px){main{margin:16px;padding:24px 18px}}
+:root{--ink:#1d2730;--sub:#66737f;--line:#dde3e8;--bg:#f4f6f8;--blue:#2763a6;--blue-bg:#e8f0fb;--red:#b3261e}
+*{-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;font-size:15px;line-height:1.45}
+.lg{max-width:360px;margin:0 auto;padding:56px 16px 40px}
+.lg h1{font-size:22px;margin:0 0 6px}.lg p{color:var(--sub);margin:0 0 18px;white-space:pre-line}.lg p.err{color:var(--red)}
+.lg button,.lg input{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;border-radius:10px;padding:12px;margin-bottom:10px}
+.lg input{border:1px solid var(--line);background:#fff}
+.lg button{border:1px solid var(--line);background:#fff;color:var(--ink)}
+.lg button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.lg button:disabled{opacity:.6}
+.lg .note{font-size:13px;color:var(--sub);margin-top:18px}
 </style>
 </head>
 <body>
-<main>
- <h1>CoverageManager (보장분석 관리)</h1>
- <p class="sub">보험 설계사가 자기 컴퓨터에서 쓰는 보장분석·고객관리 프로그램입니다.</p>
-
- <h2>무엇을 하는 프로그램인가요</h2>
- <ul>
-  <li>고객의 가입 보험 내역과 보장 현황을 정리하고, 보장분석표·리모델링 제안서를 만듭니다.</li>
-  <li>보험금 청구서·배분신청서 작성을 돕습니다.</li>
-  <li>프로그램은 사용자의 컴퓨터 안에서만 동작합니다. 별도의 서버나 회원가입이 없습니다.</li>
- </ul>
-
- <h2>Google 드라이브 연결 (선택)</h2>
- <p>사용자가 원하면 자기 Google 드라이브에 자료 사본을 보관해 다른 컴퓨터에서도 같은 자료를 쓸 수 있습니다.
- 이때 프로그램은 자기가 만든 파일에만 접근하는 권한(drive.file, drive.appdata)만 요청하며, 드라이브의 다른 파일은 보거나 바꾸지 않습니다.
- 올리는 자료는 사용자의 비밀번호로 잠근(암호화한) 상태라서 Google이나 개발자도 내용을 볼 수 없습니다.</p>
-
- <h2>개인정보</h2>
- <p>자세한 내용은 <a href="privacy.html">개인정보처리방침</a>을 확인해 주세요.</p>
-
- <footer>© 2026 함수호 · 문의: <a href="mailto:shoooo29@gmail.com">shoooo29@gmail.com</a></footer>
-</main>
+<div id="app"><div class="lg"><h1>보장분석 관리</h1><p id="msg">여는 중…</p><div id="act"></div></div></div>
+<script>
+/* 폰 보기용 작은 로그인 화면(원본: CoverageManager 저장소 site/m). 프로그램 내용은 여기 없다.
+ 구글 로그인 → 내 드라이브의 프로그램 전용 숨김 공간에서 잠긴 자료(cm-<id>-state.json)와 잠긴 폰 화면 코드(cm-<id>-mobile.json)를 받아
+ 비밀번호로 자료 열쇠를 꺼내 풀고 실행한다. 비밀번호·자료는 이 폰 밖으로 나가지 않는다. 드라이브에 쓰지 않는다(보기만) */
+const CLIENT_ID='466135820293-ijufpf0761t5gkmq50ou7hp6o21o96l7.apps.googleusercontent.com',SCOPE='https://www.googleapis.com/auth/drive.appdata',HOME=location.origin+location.pathname,LOCK_MIN=10;
+/* 시험용: ?test=http://127.0.0.1:<포트> 이면 가짜 드라이브로(토큰 없이). ?test= 로 끔. 이 컴퓨터 주소만 받음 */
+const TEST=(()=>{try{const q=new URLSearchParams(location.search).get('test');if(q!==null){if(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(q))localStorage.setItem('cm-m-test',q);else localStorage.removeItem('cm-m-test')}return localStorage.getItem('cm-m-test')||''}catch{return''}})();
+const API=TEST||'https://www.googleapis.com',$=id=>document.getElementById(id);
+const ss={get:k=>{try{return JSON.parse(sessionStorage.getItem(k))}catch{return null}},set:(k,v)=>{try{sessionStorage.setItem(k,JSON.stringify(v))}catch{}},del:k=>{try{sessionStorage.removeItem(k)}catch{}}};
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+const ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),b64=b=>{let s='';for(const x of new Uint8Array(b))s+=String.fromCharCode(x);return btoa(s)};
+function say(t,err){$('msg').textContent=t;$('msg').className=err?'err':'';$('act').innerHTML=''}
+/* ----- 구글 로그인(브라우저 주소 이동: 폰에서 팝업 없이). 돌아오면 주소 뒤 #access_token ----- */
+let authErr='';
+(()=>{const h=new URLSearchParams(location.hash.slice(1));if(!h.has('access_token')&&!h.has('error'))return;history.replaceState(null,'',HOME+location.search);const okState=h.get('state')&&h.get('state')===ss.get('cm-m-st');ss.del('cm-m-st');
+ if(okState&&h.get('access_token')){ss.set('cm-m-tok',{t:h.get('access_token'),exp:Date.now()+Number(h.get('expires_in')||3600)*1000});ss.del('cm-m-silent');ls.set('cm-m-g','1')}else authErr=h.get('error')||'state'})();
+function tokNow(){const t=ss.get('cm-m-tok');return t&&t.exp>Date.now()+60000?t.t:''}
+function authGo(silent){const st=b64(crypto.getRandomValues(new Uint8Array(12))).replace(/\W/g,'');ss.set('cm-m-st',st);if(silent)ss.set('cm-m-silent',1);
+ location.href='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({client_id:CLIENT_ID,redirect_uri:HOME,response_type:'token',scope:SCOPE,include_granted_scopes:'true',state:st,...(silent?{prompt:'none'}:{})})}
+/* 열쇠가 다 됐으면(1시간) 조용히 다시 받아 옴: 주소가 잠깐 바뀌었다 돌아오고, 비밀번호는 다시 묻지 않음(아래 열쇠 기억) */
+async function token(){if(TEST)return'test';const t=tokNow();if(t)return t;authGo(true);return new Promise(()=>{})}
+/* ----- 드라이브 (읽기만) ----- */
+let ids=null;
+async function dfetch(path){const r=await fetch(API+path,{cache:'no-store',headers:{Authorization:'Bearer '+await token()}}).catch(()=>null);if(!r)throw new Error('인터넷에 연결하지 못했어요');if(r.status===401&&!TEST){ss.del('cm-m-tok');await token()}if(!r.ok){const e=new Error('구글 드라이브 응답 '+r.status);e.status=r.status;throw e}return r}
+async function list(){const out={};let pt='';do{const j=await(await dfetch('/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields='+encodeURIComponent('nextPageToken,files(id,name,version)')+(pt?'&pageToken='+encodeURIComponent(pt):''))).json();for(const f of j.files||[])out[f.name]=f;pt=j.nextPageToken||''}while(pt);return ids=out}
+async function meta(name){if(!ids)await list();let f=ids[name];if(!f){await list();f=ids[name];if(!f)return null}try{return ids[name]=await(await dfetch(`/drive/v3/files/${f.id}?fields=id,name,version`)).json()}catch(e){if(e.status!==404)throw e;await list();return ids[name]||null}}
+async function read(name){const f=ids&&ids[name]||await meta(name);return f?dfetch(`/drive/v3/files/${f.id}?alt=media`):null}
+/* ----- 자료 열쇠 (PC vault.js와 같은 방식: 비밀번호 PBKDF2 → 잠근 자료 열쇠를 풂. 복구 코드도 됨) ----- */
+async function derive(pass,salt,iter){const b=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},b,{name:'AES-GCM',length:256},false,['decrypt'])}
+const dec=(key,o)=>crypto.subtle.decrypt({name:'AES-GCM',iv:ub(o.iv)},key,ub(o.ct));
+async function unwrap(v,pass){try{return await dec(await derive(pass,ub(v.salt),v.iter||250000),v.pw)}catch{}if(v.rc)try{return await dec(await derive(String(pass).toUpperCase().replace(/[^A-Z0-9]/g,''),ub(v.rc.salt),v.rc.iter||100000),v.rc)}catch{}return null}
+const useKey=raw=>crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt']);
+/* 풀린 열쇠는 이 탭에만(sessionStorage). 10분 넘게 안 쓰거나 [잠그기]·탭 닫기면 지움 */
+function keyTouch(){const k=ss.get('cm-m-key');if(k){k.t=Date.now();ss.set('cm-m-key',k)}}
+function lock(){ss.del('cm-m-key');location.replace(HOME)}
+/* ----- 시작 ----- */
+async function main(){
+ if(!crypto.subtle||typeof DecompressionStream==='undefined')return say('이 브라우저에서는 열 수 없어요. 휴대폰의 크롬이나 사파리를 최신으로 업데이트해 주세요.',true);
+ if(!TEST&&!tokNow()){if(!authErr&&ls.get('cm-m-g')&&!ss.get('cm-m-silent'))return authGo(true);ss.del('cm-m-silent');
+  say(authErr&&authErr!=='interaction_required'&&authErr!=='login_required'&&authErr!=='consent_required'?(authErr==='access_denied'?'구글 연결을 허용하지 않았어요. 다시 눌러 주세요.':'구글 로그인을 하지 못했어요. 다시 눌러 주세요.'):'컴퓨터 프로그램에서 온라인 동기화에 연결한 구글 계정으로 로그인해 주세요.',authErr==='access_denied');
+  $('act').innerHTML='<button class="primary" id="gBtn">구글 계정으로 로그인</button><p class="note">자료는 잠긴 채로 내려받아 이 폰 안에서만 비밀번호로 풀어요. 이 화면은 보기만 하고 자료를 바꾸지 않아요.</p>';$('gBtn').onclick=()=>authGo(false);return}
+ say('드라이브에서 자료를 찾는 중…');await list();
+ let users=[];if(ids['cm-users.json'])try{users=(await(await read('cm-users.json')).json()).users||[]}catch{}
+ users=users.filter(u=>ids[`cm-${u.id}-state.json`]);
+ if(!users.length)return say('이 구글 계정의 드라이브에 자료가 없어요.\n컴퓨터 프로그램의 환경설정 › 온라인 동기화에서 이 구글 계정으로 연결했는지 확인해 주세요.',true);
+ const saved=ss.get('cm-m-key'),su=saved&&users.find(u=>u.id===saved.uid);
+ if(su&&Date.now()-saved.t<LOCK_MIN*60000){try{return await start(su,ub(saved.k))}catch(e){ss.del('cm-m-key');return say(e.message,true)}}
+ ss.del('cm-m-key');
+ if(users.length===1)return askPass(users[0]);
+ say('사용자를 골라 주세요.');$('act').innerHTML=users.map((u,i)=>`<button data-i="${i}">${u.name?u.name.replace(/[&<>"']/g,''):'이름 없음'}</button>`).join('');
+ $('act').onclick=e=>{const b=e.target.closest('[data-i]');if(b){$('act').onclick=null;askPass(users[+b.dataset.i])}}}
+function askPass(u){const env0=read(`cm-${u.id}-state.json`).then(r=>r.text());env0.catch(()=>{});
+ say(`${u.name||'사용자'}님의 비밀번호를 넣어 주세요. 컴퓨터에서 로그인할 때 쓰는 비밀번호예요.`);
+ $('act').innerHTML='<form id="pf"><input type="text" name="username" autocomplete="username" hidden><input type="password" id="pw" autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호"><button class="primary" id="pb">열기</button></form>';
+ $('pf').username.value=u.name||u.id;setTimeout(()=>$('pw').focus(),50);
+ $('pf').onsubmit=async e=>{e.preventDefault();const pass=$('pw').value;if(!pass)return;$('pb').disabled=true;$('pb').textContent='여는 중…';
+  try{let v;try{v=JSON.parse(await env0).vault}catch{throw new Error('드라이브의 자료를 읽지 못했어요')}if(!v||!v.pw)throw new Error('잠기지 않은 예전 자료예요. 컴퓨터 프로그램에서 한 번 로그인해 주세요');
+   const raw=await unwrap(v,pass);if(!raw){$('msg').textContent='비밀번호가 달라요. 다시 넣어 주세요.';$('msg').className='err';$('pw').value='';$('pw').focus();return}
+   await start(u,raw,await env0)}catch(err){say(err.message||String(err),true)}finally{if($('pb')){$('pb').disabled=false;$('pb').textContent='열기'}}}}
+async function start(u,raw,env){const key=await useKey(raw);say('폰 화면을 여는 중…');
+ const sname=`cm-${u.id}-state.json`,mname=`cm-${u.id}-mobile.json`,sm=await meta(sname);if(env===undefined)env=await(await read(sname)).text();
+ const mr=await read(mname);if(!mr)throw new Error('폰 화면이 아직 드라이브에 없어요.\n컴퓨터 프로그램을 최신으로 업데이트한 뒤, 로그인해서 온라인 동기화를 한 번 해 주세요.');
+ let code;try{const mf=await mr.json(),b=await dec(key,mf.data);code=mf.zip==='gzip'?await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text():new TextDecoder().decode(b)}catch{throw new Error('폰 화면을 열지 못했어요. 컴퓨터에서 온라인 동기화를 한 번 해 주세요.')}
+ ss.set('cm-m-key',{uid:u.id,k:b64(raw),t:Date.now()});ls.set('cm-m-user',u.id);
+ const root=$('app');root.innerHTML='';
+ new Function('M',code)({key,uid:u.id,name:u.name||'',meta,read,lock,root,env,envVersion:sm?String(sm.version):''})}
+/* 10분 넘게 안 쓰면 잠금 */
+['pointerdown','keydown'].forEach(t=>addEventListener(t,keyTouch,{passive:true}));
+addEventListener('visibilitychange',()=>{const k=ss.get('cm-m-key');if(!k)return;if(document.visibilityState==='hidden')keyTouch();else if(Date.now()-k.t>LOCK_MIN*60000)lock()});
+setInterval(()=>{const k=ss.get('cm-m-key');if(k&&Date.now()-k.t>LOCK_MIN*60000)lock()},30000);
+main().catch(e=>say(e.message||String(e),true));
+</script>
 </body>
 </html>
