@@ -6,6 +6,14 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#2763a6">
 <title>보장분석 관리</title>
+<!-- 폰 홈 화면에 추가하면 앱처럼(주소창 없이) 열림 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="보장분석">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{--ink:#1d2730;--sub:#66737f;--line:#dde3e8;--bg:#f4f6f8;--blue:#2763a6;--blue-bg:#e8f0fb;--red:#b3261e}
 *{-webkit-tap-highlight-color:transparent}
@@ -64,7 +72,7 @@ async function main(){
  if(!crypto.subtle||typeof DecompressionStream==='undefined')return say('이 브라우저에서는 열 수 없어요. 휴대폰의 크롬이나 사파리를 최신으로 업데이트해 주세요.',true);
  if(!TEST&&!tokNow()){if(!authErr&&ls.get('cm-m-g')&&!ss.get('cm-m-silent'))return authGo(true);ss.del('cm-m-silent');
   say(authErr&&authErr!=='interaction_required'&&authErr!=='login_required'&&authErr!=='consent_required'?(authErr==='access_denied'?'구글 연결을 허용하지 않았어요. 다시 눌러 주세요.':'구글 로그인을 하지 못했어요. 다시 눌러 주세요.'):'컴퓨터 프로그램에서 온라인 동기화에 연결한 구글 계정으로 로그인해 주세요.',authErr==='access_denied');
-  $('act').innerHTML='<button class="primary" id="gBtn">구글 계정으로 로그인</button><p class="note">자료는 잠긴 채로 내려받아 이 폰 안에서만 비밀번호로 풀어요. 이 화면은 보기만 하고 자료를 바꾸지 않아요.</p>';$('gBtn').onclick=()=>authGo(false);return}
+  $('act').innerHTML='<button class="primary" id="gBtn">구글 계정으로 로그인</button><p class="note">자료는 잠긴 채로 내려받아 이 폰 안에서만 비밀번호로 풀어요.</p>';$('gBtn').onclick=()=>authGo(false);return}
  say('드라이브에서 자료를 찾는 중…');
  if(!ls.get('cm-m-email'))try{const j=await(await dfetch('/drive/v3/about?fields='+encodeURIComponent('user(emailAddress)'))).json();if(j.user&&j.user.emailAddress)ls.set('cm-m-email',j.user.emailAddress)}catch{}
  await list();
