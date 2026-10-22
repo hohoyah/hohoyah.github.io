@@ -31,21 +31,23 @@ const CLIENT_ID='466135820293-ijufpf0761t5gkmq50ou7hp6o21o96l7.apps.googleuserco
 const TEST=(()=>{try{const q=new URLSearchParams(location.search).get('test');if(q!==null){if(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(q))localStorage.setItem('cm-m-test',q);else localStorage.removeItem('cm-m-test')}return localStorage.getItem('cm-m-test')||''}catch{return''}})();
 const API=TEST||'https://www.googleapis.com',$=id=>document.getElementById(id);
 const ss={get:k=>{try{return JSON.parse(sessionStorage.getItem(k))}catch{return null}},set:(k,v)=>{try{sessionStorage.setItem(k,JSON.stringify(v))}catch{}},del:k=>{try{sessionStorage.removeItem(k)}catch{}}};
-const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}}};
+const ls={get:k=>{try{return localStorage.getItem(k)}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
 const ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),b64=b=>{let s='';for(const x of new Uint8Array(b))s+=String.fromCharCode(x);return btoa(s)};
 function say(t,err){$('msg').textContent=t;$('msg').className=err?'err':'';$('act').innerHTML=''}
 /* ----- 구글 로그인(브라우저 주소 이동: 폰에서 팝업 없이). 돌아오면 주소 뒤 #access_token ----- */
 let authErr='';
 (()=>{const h=new URLSearchParams(location.hash.slice(1));if(!h.has('access_token')&&!h.has('error'))return;history.replaceState(null,'',HOME+location.search);const okState=h.get('state')&&h.get('state')===ss.get('cm-m-st');ss.del('cm-m-st');
- if(okState&&h.get('access_token')){ss.set('cm-m-tok',{t:h.get('access_token'),exp:Date.now()+Number(h.get('expires_in')||3600)*1000});ss.del('cm-m-silent');ls.set('cm-m-g','1')}else authErr=h.get('error')||'state'})();
-function tokNow(){const t=ss.get('cm-m-tok');return t&&t.exp>Date.now()+60000?t.t:''}
-function authGo(silent){const st=b64(crypto.getRandomValues(new Uint8Array(12))).replace(/\W/g,'');ss.set('cm-m-st',st);if(silent)ss.set('cm-m-silent',1);
- location.href='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({client_id:CLIENT_ID,redirect_uri:HOME,response_type:'token',scope:SCOPE,include_granted_scopes:'true',state:st,...(silent?{prompt:'none'}:{})})}
+ if(okState&&h.get('access_token')){ls.set('cm-m-tok',JSON.stringify({t:h.get('access_token'),exp:Date.now()+Number(h.get('expires_in')||3600)*1000}));if(!ss.get('cm-m-silent'))ls.del('cm-m-email');ss.del('cm-m-silent');ls.set('cm-m-g','1')}else authErr=h.get('error')||'state'})();
+/* 구글 열쇠(1시간)는 이 폰에 기억(localStorage): 창을 닫았다 열어도 1시간 안이면 구글 로그인 없이. 드라이브의 프로그램 전용 공간만 쓰는 열쇠 */
+function tokNow(){let t=null;try{t=JSON.parse(ls.get('cm-m-tok'))}catch{}return t&&t.exp>Date.now()+60000?t.t:''}
+/* login_hint = 지난번 로그인한 구글 계정 메일: 계정이 여럿이어도 조용히 다시 받기(prompt=none)가 계정 고르기에서 멈추지 않게 */
+function authGo(silent){const st=b64(crypto.getRandomValues(new Uint8Array(12))).replace(/\W/g,''),hint=ls.get('cm-m-email');ss.set('cm-m-st',st);if(silent)ss.set('cm-m-silent',1);
+ location.href='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({client_id:CLIENT_ID,redirect_uri:HOME,response_type:'token',scope:SCOPE,include_granted_scopes:'true',state:st,...(hint?{login_hint:hint}:{}),...(silent?{prompt:'none'}:{})})}
 /* 열쇠가 다 됐으면(1시간) 조용히 다시 받아 옴: 주소가 잠깐 바뀌었다 돌아오고, 비밀번호는 다시 묻지 않음(아래 열쇠 기억) */
 async function token(){if(TEST)return'test';const t=tokNow();if(t)return t;authGo(true);return new Promise(()=>{})}
 /* ----- 드라이브 (읽기만) ----- */
 let ids=null;
-async function dfetch(path){const r=await fetch(API+path,{cache:'no-store',headers:{Authorization:'Bearer '+await token()}}).catch(()=>null);if(!r)throw new Error('인터넷에 연결하지 못했어요');if(r.status===401&&!TEST){ss.del('cm-m-tok');await token()}if(!r.ok){const e=new Error('구글 드라이브 응답 '+r.status);e.status=r.status;throw e}return r}
+async function dfetch(path){const r=await fetch(API+path,{cache:'no-store',headers:{Authorization:'Bearer '+await token()}}).catch(()=>null);if(!r)throw new Error('인터넷에 연결하지 못했어요');if(r.status===401&&!TEST){ls.del('cm-m-tok');await token()}if(!r.ok){const e=new Error('구글 드라이브 응답 '+r.status);e.status=r.status;throw e}return r}
 async function list(){const out={};let pt='';do{const j=await(await dfetch('/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields='+encodeURIComponent('nextPageToken,files(id,name,version)')+(pt?'&pageToken='+encodeURIComponent(pt):''))).json();for(const f of j.files||[])out[f.name]=f;pt=j.nextPageToken||''}while(pt);return ids=out}
 async function meta(name){if(!ids)await list();let f=ids[name];if(!f){await list();f=ids[name];if(!f)return null}try{return ids[name]=await(await dfetch(`/drive/v3/files/${f.id}?fields=id,name,version`)).json()}catch(e){if(e.status!==404)throw e;await list();return ids[name]||null}}
 async function read(name){const f=ids&&ids[name]||await meta(name);return f?dfetch(`/drive/v3/files/${f.id}?alt=media`):null}
@@ -53,7 +55,7 @@ async function read(name){const f=ids&&ids[name]||await meta(name);return f?dfet
 async function derive(pass,salt,iter){const b=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},b,{name:'AES-GCM',length:256},false,['decrypt'])}
 const dec=(key,o)=>crypto.subtle.decrypt({name:'AES-GCM',iv:ub(o.iv)},key,ub(o.ct));
 async function unwrap(v,pass){try{return await dec(await derive(pass,ub(v.salt),v.iter||250000),v.pw)}catch{}if(v.rc)try{return await dec(await derive(String(pass).toUpperCase().replace(/[^A-Z0-9]/g,''),ub(v.rc.salt),v.rc.iter||100000),v.rc)}catch{}return null}
-const useKey=raw=>crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt']);
+const useKey=raw=>crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt','encrypt']);
 /* 풀린 열쇠는 이 탭에만(sessionStorage). 10분 넘게 안 쓰거나 [잠그기]·탭 닫기면 지움 */
 function keyTouch(){const k=ss.get('cm-m-key');if(k){k.t=Date.now();ss.set('cm-m-key',k)}}
 function lock(){ss.del('cm-m-key');location.replace(HOME)}
@@ -63,7 +65,9 @@ async function main(){
  if(!TEST&&!tokNow()){if(!authErr&&ls.get('cm-m-g')&&!ss.get('cm-m-silent'))return authGo(true);ss.del('cm-m-silent');
   say(authErr&&authErr!=='interaction_required'&&authErr!=='login_required'&&authErr!=='consent_required'?(authErr==='access_denied'?'구글 연결을 허용하지 않았어요. 다시 눌러 주세요.':'구글 로그인을 하지 못했어요. 다시 눌러 주세요.'):'컴퓨터 프로그램에서 온라인 동기화에 연결한 구글 계정으로 로그인해 주세요.',authErr==='access_denied');
   $('act').innerHTML='<button class="primary" id="gBtn">구글 계정으로 로그인</button><p class="note">자료는 잠긴 채로 내려받아 이 폰 안에서만 비밀번호로 풀어요. 이 화면은 보기만 하고 자료를 바꾸지 않아요.</p>';$('gBtn').onclick=()=>authGo(false);return}
- say('드라이브에서 자료를 찾는 중…');await list();
+ say('드라이브에서 자료를 찾는 중…');
+ if(!ls.get('cm-m-email'))try{const j=await(await dfetch('/drive/v3/about?fields='+encodeURIComponent('user(emailAddress)'))).json();if(j.user&&j.user.emailAddress)ls.set('cm-m-email',j.user.emailAddress)}catch{}
+ await list();
  let users=[];if(ids['cm-users.json'])try{users=(await(await read('cm-users.json')).json()).users||[]}catch{}
  users=users.filter(u=>ids[`cm-${u.id}-state.json`]);
  if(!users.length)return say('이 구글 계정의 드라이브에 자료가 없어요.\n컴퓨터 프로그램의 환경설정 › 온라인 동기화에서 이 구글 계정으로 연결했는지 확인해 주세요.',true);
@@ -87,7 +91,7 @@ async function start(u,raw,env){const key=await useKey(raw);say('폰 화면을 �
  let code;try{const mf=await mr.json(),b=await dec(key,mf.data);code=mf.zip==='gzip'?await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).text():new TextDecoder().decode(b)}catch{throw new Error('폰 화면을 열지 못했어요. 컴퓨터에서 온라인 동기화를 한 번 해 주세요.')}
  ss.set('cm-m-key',{uid:u.id,k:b64(raw),t:Date.now()});ls.set('cm-m-user',u.id);
  const root=$('app');root.innerHTML='';
- new Function('M',code)({key,uid:u.id,name:u.name||'',meta,read,lock,root,env,envVersion:sm?String(sm.version):''})}
+ new Function('M',code)({key,encKey:key,token,uid:u.id,name:u.name||'',meta,read,lock,root,env,envVersion:sm?String(sm.version):''})}
 /* 10분 넘게 안 쓰면 잠금 */
 ['pointerdown','keydown'].forEach(t=>addEventListener(t,keyTouch,{passive:true}));
 addEventListener('visibilitychange',()=>{const k=ss.get('cm-m-key');if(!k)return;if(document.visibilityState==='hidden')keyTouch();else if(Date.now()-k.t>LOCK_MIN*60000)lock()});
